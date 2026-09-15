@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -27,6 +28,7 @@ import java.util.Optional;
  *     — la nota de D3 ("en D4 esto se vuelve un query method") se paga AQUÍ. La promesa "no tocar el
  *     servicio" protege a TaskService (que no se tocó), no a ProjectService (que ya se tocó en MP-4).
  */
+
 @Service
 public class ProjectService {
 
@@ -100,5 +102,24 @@ public class ProjectService {
                 .orElseThrow(() -> new ProjectNotFoundException(id));
         tareasDe(id).forEach(t -> taskRepository.deleteById(t.getId()));   // cascada manual (la FK obliga el orden)
         projectRepository.deleteById(id);
+    }
+
+    /**
+     * Summary de un proyecto: cuántas tareas tiene por estado y cuántas están vencidas. Recibe el
+     * proyecto ya encontrado (el controller decide 404 con buscarPorId). Reutiliza Task.estaVencida().
+     */
+    public com.taskflow.dto.ProjectSummaryResponse summary(Project proyecto) {
+        List<com.taskflow.model.Task> tareas = taskRepository.findByProjectId(proyecto.getId());
+        long total = tareas.size();
+        java.util.Map<String, Long> byStatus = new java.util.HashMap<>();
+        // inicializar con las tres claves en 0, como pide la especificación
+        for (com.taskflow.model.TaskStatus s : com.taskflow.model.TaskStatus.values()) {
+            byStatus.put(s.name(), 0L);
+        }
+        for (com.taskflow.model.Task t : tareas) {
+            byStatus.put(t.getStatus().name(), byStatus.get(t.getStatus().name()) + 1);
+        }
+        long overdue = tareas.stream().filter(com.taskflow.model.Task::estaVencida).count();
+        return com.taskflow.mapper.ProjectMapper.aSummary(proyecto, total, byStatus, overdue);
     }
 }
